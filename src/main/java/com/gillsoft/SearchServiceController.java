@@ -3,14 +3,11 @@ package com.gillsoft;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 import org.joda.time.Days;
 import org.joda.time.LocalDate;
@@ -18,9 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.gillsoft.abstract_rest_service.AbstractTripSearchService;
+import com.gillsoft.abstract_rest_service.SimpleAbstractTripSearchService;
 import com.gillsoft.cache.CacheHandler;
-import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.client.CacheProcessing;
 import com.gillsoft.client.Price;
 import com.gillsoft.client.PriceDetail;
@@ -30,11 +26,10 @@ import com.gillsoft.client.RouteDetail;
 import com.gillsoft.client.ScheduleTrip;
 import com.gillsoft.client.Trip;
 import com.gillsoft.client.TripPackage;
-import com.gillsoft.concurrent.PoolType;
-import com.gillsoft.concurrent.ThreadPoolStore;
 import com.gillsoft.model.Currency;
 import com.gillsoft.model.Document;
 import com.gillsoft.model.Locality;
+import com.gillsoft.model.Organisation;
 import com.gillsoft.model.Required;
 import com.gillsoft.model.RestError;
 import com.gillsoft.model.ReturnCondition;
@@ -45,12 +40,12 @@ import com.gillsoft.model.SeatsScheme;
 import com.gillsoft.model.Segment;
 import com.gillsoft.model.Tariff;
 import com.gillsoft.model.TripContainer;
+import com.gillsoft.model.Vehicle;
 import com.gillsoft.model.request.TripSearchRequest;
 import com.gillsoft.model.response.TripSearchResponse;
-import com.gillsoft.util.CacheUtil;
 
 @RestController
-public class SearchServiceController extends AbstractTripSearchService {
+public class SearchServiceController extends SimpleAbstractTripSearchService<TripPackage> {
 	
 	@Autowired
 	private RestClient client;
@@ -61,21 +56,17 @@ public class SearchServiceController extends AbstractTripSearchService {
 
 	@Override
 	public TripSearchResponse initSearchResponse(TripSearchRequest request) {
-		
-		// формируем задания поиска
-		List<Callable<TripPackage>> callables = new ArrayList<>();
-		for (final Date date : request.getDates()) {
-			for (final String[] pair : request.getLocalityPairs()) {
-				callables.add(() -> {
-					TripPackage tripPackage = new TripPackage();
-					tripPackage.setRequest(TripSearchRequest.createRequest(pair, date));
-					searchTrips(tripPackage);
-					return tripPackage;
-				});
-			}
-		}
-		// запускаем задания и полученные ссылки кладем в кэш
-		return CacheUtil.putToCache(cache, ThreadPoolStore.executeAll(PoolType.SEARCH, callables));
+		return simpleInitSearchResponse(cache, request);
+	}
+	
+	@Override
+	public void addInitSearchCallables(List<Callable<TripPackage>> callables, String[] pair, Date date) {
+		callables.add(() -> {
+			TripPackage tripPackage = new TripPackage();
+			tripPackage.setRequest(TripSearchRequest.createRequest(pair, date));
+			searchTrips(tripPackage);
+			return tripPackage;
+		});
 	}
 	
 	/*
@@ -141,62 +132,26 @@ public class SearchServiceController extends AbstractTripSearchService {
 			tripPackage.setInProgress(false);
 		}
 	}
+	
+	@Override
+	public void addNextGetSearchCallablesAndResult(List<Callable<TripPackage>> callables, Map<String, Vehicle> vehicles,
+			Map<String, Locality> localities, Map<String, Organisation> organisations, Map<String, Segment> segments,
+			List<TripContainer> containers, TripPackage tripPackage) {
+		
+		addSearchResult(localities, segments, containers, tripPackage);
+		if (tripPackage.isInProgress()) {
+			
+			// добавляем следующую таску 
+			callables.add(() -> {
+				searchTrips(tripPackage);
+				return tripPackage;
+			});
+		}
+	}
 
 	@Override
 	public TripSearchResponse getSearchResultResponse(String searchId) {
-		try {
-			// вытаскиваем с кэша ссылки, по которым нужно получить результат поиска
-			@SuppressWarnings("unchecked")
-			List<Future<TripPackage>> futures = (List<Future<TripPackage>>) CacheUtil.getFromCache(cache, searchId);
-			
-			// список заданий на дополучение результата, которого еще не было в кэше
-			List<Callable<TripPackage>> callables = new ArrayList<>();
-			
-			// список ссылок, по которым нет еще результата
-			List<Future<TripPackage>> otherFutures = new CopyOnWriteArrayList<>();
-			
-			// идем по ссылкам и из выполненных берем результат, а с
-			// невыполненных формируем список для следующего запроса результата
-			Map<String, Locality> localities = new HashMap<>();
-			Map<String, Segment> segments = new HashMap<>();
-			List<TripContainer> containers = new ArrayList<>();
-			for (Future<TripPackage> future : futures) {
-				if (future.isDone()) {
-					try {
-						TripPackage tripPackage = future.get();
-						addSearchResult(localities, segments, containers, tripPackage);
-						if (tripPackage.isInProgress()) {
-							
-							// добавляем следующую таску 
-							callables.add(() -> {
-								searchTrips(tripPackage);
-								return tripPackage;
-							});
-						}
-					} catch (InterruptedException | ExecutionException e) {
-					}
-				} else {
-					otherFutures.add(future);
-				}
-			}
-			// запускаем дополучение результата
-			if (!callables.isEmpty()) {
-				otherFutures.addAll(ThreadPoolStore.executeAll(PoolType.SEARCH, callables));
-			}
-			// оставшиеся ссылки кладем в кэш и получаем новый ид или заканчиваем поиск
-			TripSearchResponse response = null;
-			if (!otherFutures.isEmpty()) {
-				response = CacheUtil.putToCache(cache, otherFutures);
-			} else {
-				response = new TripSearchResponse();
-			}
-			response.setLocalities(localities);
-			response.setSegments(segments);
-			response.setTripContainers(containers);
-			return response;
-		} catch (IOCacheException e) {
-			return new TripSearchResponse(null, e);
-		}
+		return simpleGetSearchResponse(cache, searchId);
 	}
 	
 	private void addSearchResult(Map<String, Locality> localities, Map<String, Segment> segments,
