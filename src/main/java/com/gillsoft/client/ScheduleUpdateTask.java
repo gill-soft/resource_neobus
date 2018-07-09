@@ -1,5 +1,6 @@
 package com.gillsoft.client;
 
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -13,13 +14,17 @@ public class ScheduleUpdateTask extends AbstractUpdateTask {
 	
 	private Date date;
 
+	public ScheduleUpdateTask(Date date) {
+		this.date = DateUtils.truncate(date, Calendar.DATE);
+	}
+
 	@Override
 	public void run() {
 		RestClient client = ContextProvider.getBean(RestClient.class);
 		try {
 			List<ScheduleTrip> schedule = client.getSchedule(date);
 			
-			// время жизни кэша маршрута до конца даты маршрута
+			// время жизни кэша расписания до начала следующих суток
 			Date liveDate = DateUtils.addDays(date, 1);
 			long timeToLive = liveDate.getTime() - System.currentTimeMillis();
 			

@@ -47,7 +47,7 @@ public class LocalityServiceController extends AbstractLocalityService {
 			synchronized (LocalityServiceController.class) {
 				if (all == null) {
 					try {
-						List<Station> stations = client.getStationsFromCache();
+						List<Station> stations = client.getCachedStations();
 						if (stations != null) {
 							all = new CopyOnWriteArrayList<>();
 							used = new CopyOnWriteArrayList<>();

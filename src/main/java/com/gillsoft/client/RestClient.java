@@ -2,23 +2,29 @@ package com.gillsoft.client;
 
 import java.net.URI;
 import java.text.MessageFormat;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 
+import org.apache.commons.lang.time.DateUtils;
 import org.apache.logging.log4j.core.util.datetime.FastDateFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -27,7 +33,6 @@ import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.cache.RedisMemoryCache;
 import com.gillsoft.logging.SimpleRequestResponseLoggingInterceptor;
 import com.gillsoft.util.RestTemplateUtil;
-import com.google.common.base.Objects;
 
 @Component
 @Scope(value = ConfigurableBeanFactory.SCOPE_SINGLETON)
@@ -41,15 +46,17 @@ public class RestClient {
 	
 	private static final String STATUS_OK = "OK";
 	private static final String STATUS_ERROR = "Error";
-	private static final String NOT_LOGGED = "NOT LOGGED";
 	
+	public static final String TIME_FORMAT = "HH:mm";
 	public static final String DATE_FORMAT = "yyyy-MM-dd";
 	public static final String FULL_DATE_FORMAT = "yyyy-MM-dd HH:mm";
 	
+	public final static FastDateFormat timeFormat = FastDateFormat.getInstance(TIME_FORMAT);
 	public final static FastDateFormat dateFormat = FastDateFormat.getInstance(DATE_FORMAT);
 	public final static FastDateFormat fullDateFormat = FastDateFormat.getInstance(FULL_DATE_FORMAT);
 	
 	private static final String LOGIN = "login";
+	private static final String LOGOUT = "logout";
 	private static final String STATIONS = "station";
 	private static final String ROUTE = "schedule/{0}/detailed";
 	private static final String SCHEDULE = "schedule/{0}";
@@ -78,16 +85,21 @@ public class RestClient {
 		return template;
 	}
 	
-	public void login() throws ResponseError {
+	public void login(HttpHeaders headers) throws ResponseError {
 		LoginRequest request = new LoginRequest();
 		request.setLogin(Config.getLogin());
 		request.setPassword(Config.getPassword());
 		getResult(template, request, LOGIN, HttpMethod.POST,
-				new ParameterizedTypeReference<Response<Object>>() { }, false);
+				new ParameterizedTypeReference<Response<Object>>() { }, headers);
+	}
+	
+	public void logout(HttpHeaders headers) throws ResponseError {
+		getResult(template, null, LOGOUT, HttpMethod.POST,
+				new ParameterizedTypeReference<Response<Object>>() { }, headers);
 	}
 	
 	@SuppressWarnings("unchecked")
-	public List<Station> getStationsFromCache() throws IOCacheException {
+	public List<Station> getCachedStations() throws IOCacheException {
 		Map<String, Object> params = new HashMap<>();
 		params.put(RedisMemoryCache.OBJECT_NAME, RestClient.STATIONS_CACHE_KEY);
 		params.put(RedisMemoryCache.IGNORE_AGE, true);
@@ -98,72 +110,156 @@ public class RestClient {
 	
 	public List<Station> getStations() throws ResponseError {
 		return getResult(template, null, STATIONS, HttpMethod.GET,
-				new ParameterizedTypeReference<Response<List<Station>>>() { }, true);
+				new ParameterizedTypeReference<Response<List<Station>>>() { });
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<ScheduleTrip> getCachedSchedule(Date date) throws ResponseError {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, getScheduleCacheKey(date));
+		params.put(RedisMemoryCache.UPDATE_TASK, new ScheduleUpdateTask(date));
+		try {
+			return (List<ScheduleTrip>) checkCache(cache.read(params));
+		} catch (IOCacheException e) {
+			throw new CacheProcessing(e.getMessage());
+		} catch (ResponseError e) {
+			throw e;
+		} catch (Exception e) {
+			throw new ResponseError(e.getMessage());
+		}
 	}
 	
 	public List<ScheduleTrip> getSchedule(Date date) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(SCHEDULE, dateFormat.format(date)),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<List<ScheduleTrip>>>() { }, true);
+				HttpMethod.GET, new ParameterizedTypeReference<Response<List<ScheduleTrip>>>() { });
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<Trip> getCachedTrips(String from, String to, Date date) throws ResponseError {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, getTripsCacheKey(date, from, to));
+		params.put(RedisMemoryCache.UPDATE_TASK, new TripsUpdateTask(from, to, date));
+		try {
+			return (List<Trip>) checkCache(cache.read(params));
+		} catch (IOCacheException e) {
+			throw new CacheProcessing(e.getMessage());
+		} catch (ResponseError e) {
+			throw e;
+		} catch (Exception e) {
+			throw new ResponseError(e.getMessage());
+		}
 	}
 	
 	public List<Trip> getTrips(String from, String to, Date date) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(SCHEDULE_FROM_TO, dateFormat.format(date), from, to),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<List<Trip>>>() { }, true);
+				HttpMethod.GET, new ParameterizedTypeReference<Response<List<Trip>>>() { });
 	}
 	
-	public Price getTrips(String from, String to, String tripId) throws ResponseError {
+	public Price getCachedPrice(String from, String to, String tripId, Date departure) throws ResponseError {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, getPriceCacheKey(tripId, from, to));
+		params.put(RedisMemoryCache.UPDATE_TASK, new PriceUpdateTask(tripId, from, to, departure));
+		try {
+			return (Price) checkCache(cache.read(params));
+		} catch (IOCacheException e) {
+			throw new CacheProcessing(e.getMessage());
+		} catch (ResponseError e) {
+			throw e;
+		} catch (Exception e) {
+			throw new ResponseError(e.getMessage());
+		}
+	}
+	
+	public Price getPrice(String from, String to, String tripId) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(PRICES, from, to, tripId),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<Price>>() { }, true);
+				HttpMethod.GET, new ParameterizedTypeReference<Response<Price>>() { });
+	}
+	
+	public Route getCachedRoute(String tripId) throws ResponseError {
+		Map<String, Object> params = new HashMap<>();
+		params.put(RedisMemoryCache.OBJECT_NAME, getRouteCacheKey(tripId));
+		params.put(RedisMemoryCache.UPDATE_TASK, new RouteUpdateTask(tripId));
+		try {
+			return (Route) checkCache(cache.read(params));
+		} catch (IOCacheException e) {
+			throw new CacheProcessing(e.getMessage());
+		} catch (ResponseError e) {
+			throw e;
+		} catch (Exception e) {
+			throw new ResponseError(e.getMessage());
+		}
 	}
 	
 	public Route getRoute(String tripId) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(ROUTE, tripId),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<Route>>() { }, true);
+				HttpMethod.GET, new ParameterizedTypeReference<Response<Route>>() { });
+	}
+	
+//	public List<Trip> search(String from, String to, Date date) throws ResponseError {
+//		List<ScheduleTrip> schedule = getCachedSchedule(date);
+//		if (schedule != null) {
+//			List<Trip> trips = getCachedTrips(from, to, date);
+//		}
+//	}
+	
+	private Object checkCache(Object value) throws ResponseError {
+		if (value instanceof ResponseError) {
+			throw (ResponseError) value;
+		} else {
+			return value;
+		}
 	}
 	
 	private void checkStatus(Response<?> response) throws ResponseError {
 		if (response == null) {
 			throw new ResponseError("Empty response");
 		}
-		if (Objects.equal(response.getStatus(), STATUS_ERROR)) {
+		if (Objects.equals(response.getStatus(), STATUS_ERROR)) {
 			throw new ResponseError(response.getMessage());
 		}
-		if (!Objects.equal(response.getStatus(), STATUS_OK)) {
+		if (!Objects.equals(response.getStatus(), STATUS_OK)) {
 			throw new ResponseError("Unknown status");
 		}
 	}
 	
 	private <T> T getResult(RestTemplate template, Request request, String method, HttpMethod httpMethod,
-			ParameterizedTypeReference<Response<T>> type, boolean checkLogged) throws ResponseError {
+			ParameterizedTypeReference<Response<T>> type) throws ResponseError {
+		HttpHeaders headers = new HttpHeaders();
+		try {
+			this.template = createNewPoolingTemplate(Config.getRequestTimeout());
+			login(headers);
+			return getResult(template, request, method, httpMethod, type, headers);
+		} finally {
+			logout(headers);
+		}
+	}
+	
+	private <T> T getResult(RestTemplate template, Request request, String method, HttpMethod httpMethod,
+			ParameterizedTypeReference<Response<T>> type, HttpHeaders headers) throws ResponseError {
 		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + method)
 				.build().toUri();
-		RequestEntity<Request> requestEntity = new RequestEntity<Request>(request, httpMethod, uri);
+		RequestEntity<Request> requestEntity = new RequestEntity<Request>(request, headers, httpMethod, uri);
 		ResponseEntity<Response<T>> response = template.exchange(requestEntity, type);
-		Response<T> resultResponse = response.getBody();
-		try {
-			checkStatus(resultResponse);
-		} catch (ResponseError e) {
-			if (checkLogged) {
-				if (e.getMessage() != null
-						&& e.getMessage().toUpperCase().contains(NOT_LOGGED)) {
-					login();
-					return getResult(template, request, method, httpMethod, type, false);
-				}
-			}
+		if (Objects.equals(method, LOGIN)) {
+			createHeaders(headers, response.getHeaders().getValuesAsList(HttpHeaders.SET_COOKIE));
 		}
+		Response<T> resultResponse = response.getBody();
+		checkStatus(resultResponse);
 		return response.getBody().getData();
 	}
 	
-	public static void main(String[] args) {
-		RestClient client = new RestClient();
-		try {
-			for (Station station : client.getStations()) {
-				System.out.println(station.getName());
+	private HttpHeaders createHeaders(HttpHeaders headers, List<String> cookies) {
+		Map<String, String> cookiesMap = new HashMap<>();
+		for (String cookie : cookies) {
+			if (cookie.contains("=")) {
+				String[] params = cookie.split("=");
+				cookiesMap.put(params[0], params[1]);
 			}
-		} catch (ResponseError e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
+		for (Entry<String, String> cookie : cookiesMap.entrySet()) {
+			headers.add(HttpHeaders.COOKIE, String.join("=", cookie.getKey(), cookie.getValue()));
+		}
+		return headers;
 	}
 
 	public CacheHandler getCache() {
@@ -175,7 +271,20 @@ public class RestClient {
 	}
 	
 	public static String getScheduleCacheKey(Date date) {
-		return SCHEDULE_CACHE_KEY + date.getTime();
+		return SCHEDULE_CACHE_KEY + DateUtils.truncate(date, Calendar.DATE).getTime();
+	}
+	
+	public static String getPriceCacheKey(String tripId, String from, String to) {
+		return PRICE_CACHE_KEY + String.join(";", tripId, from, to);
+	}
+	
+	public static String getTripsCacheKey(Date date, String from, String to) {
+		return TRIPS_CACHE_KEY + String.join(";",
+				String.valueOf(DateUtils.truncate(date, Calendar.DATE).getTime()), from, to);
+	}
+	
+	public static RestClientException createUnavailableMethod() {
+		return new RestClientException("Method is unavailable");
 	}
 	
 }

@@ -40,12 +40,12 @@ public class Config {
 		return Integer.valueOf(properties.getProperty("request.search.timeout"));
 	}
 	
-	public static long getCacheTimeToLive() {
-		return Long.valueOf(properties.getProperty("cache.time.to.live"));
+	public static long getCacheTripTimeToLive() {
+		return Long.valueOf(properties.getProperty("cache.trip.time.to.live"));
 	}
 	
-	public static long getCacheUpdateDelay() {
-		return Long.valueOf(properties.getProperty("cache.update.delay"));
+	public static long getCacheTripUpdateDelay() {
+		return Long.valueOf(properties.getProperty("cache.trip.update.delay"));
 	}
 	
 	public static long getCacheErrorTimeToLive() {

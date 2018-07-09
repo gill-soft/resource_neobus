@@ -19,6 +19,10 @@ public class Trip implements Serializable {
 	
 	@JsonFormat(shape = Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
 	private Date time2;
+	
+	private Price price;
+	
+	private Route route;
 
 	public String getScheduleId() {
 		return scheduleId;
@@ -58,6 +62,22 @@ public class Trip implements Serializable {
 
 	public void setTime2(Date time2) {
 		this.time2 = time2;
+	}
+
+	public Price getPrice() {
+		return price;
+	}
+
+	public void setPrice(Price price) {
+		this.price = price;
+	}
+
+	public Route getRoute() {
+		return route;
+	}
+
+	public void setRoute(Route route) {
+		this.route = route;
 	}
 
 }
