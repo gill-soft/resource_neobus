@@ -3,8 +3,10 @@ package com.gillsoft;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.gillsoft.abstract_rest_service.AbstractLocalityService;
@@ -42,35 +44,48 @@ public class LocalityServiceController extends AbstractLocalityService {
 		return used;
 	}
 	
-	private void createLocalities() {
-		if (all == null) {
+	@Scheduled(initialDelay = 60000, fixedDelay = 900000)
+	public void createLocalities() {
+		if (LocalityServiceController.all == null) {
 			synchronized (LocalityServiceController.class) {
-				if (all == null) {
-					try {
-						List<Station> stations = client.getCachedStations();
-						if (stations != null) {
-							all = new CopyOnWriteArrayList<>();
-							used = new CopyOnWriteArrayList<>();
-							for (Station station : stations) {
-								Locality locality = new Locality();
-								locality.setId(station.getStationId());
-								locality.setName(Lang.PL, station.getName());
-								locality.setDetails(station.getDescription());
-								all.add(locality);
-								if (station.isActive()) {
-									used.add(locality);
+				if (LocalityServiceController.all == null) {
+					boolean cacheError = true;
+					do {
+						try {
+							List<Station> stations = client.getCachedStations();
+							if (stations != null) {
+								List<Locality> all = new CopyOnWriteArrayList<>();
+								List<Locality> used = new CopyOnWriteArrayList<>();
+								for (Station station : stations) {
+									Locality locality = new Locality();
+									locality.setId(station.getStationId());
+									locality.setName(Lang.PL, station.getName());
+									locality.setDetails(station.getDescription());
+									all.add(locality);
+									if (station.isActive()) {
+										used.add(locality);
+									}
 								}
+								LocalityServiceController.all = all;
+								LocalityServiceController.used = used;
+								cacheError = false;
+							}
+						} catch (IOCacheException e) {
+							try {
+								TimeUnit.MILLISECONDS.sleep(100);
+							} catch (InterruptedException ie) {
 							}
 						}
-					} catch (IOCacheException e) {
-						// TODO Auto-generated catch block
-					}
+					} while (cacheError);
 				}
 			}
 		}
 	}
 	
 	public static Locality getLocality(String id) {
+		if (all == null) {
+			return null;
+		}
 		for (Locality locality : all) {
 			if (Objects.equal(id, locality.getId())) {
 				return locality;

@@ -28,6 +28,22 @@ public class TripsUpdateTask extends AbstractUpdateTask {
 		RestClient client = ContextProvider.getBean(RestClient.class);
 		try {
 			List<Trip> trips = client.getTrips(from, to, date);
+			
+			// для каждого рейса берем с кэша стоимость и маршрут
+			for (Trip trip : trips) {
+				if (trip.getRoute() == null) {
+					try {
+						trip.setRoute(client.getCachedRoute(trip.getScheduleId()));
+					} catch (Exception e) {
+					}
+				}
+				if (trip.getPrice() == null) {
+					try {
+						trip.setPrice(client.getCachedPrice(from, to, trip.getScheduleId(), trip.getTime1()));
+					} catch (Exception e) {
+					}
+				}
+			}
 			writeObject(RestClient.getTripsCacheKey(date, from, to), trips, false,
 					getTimeToLive(trips), Config.getCacheTripUpdateDelay());
 		} catch (ResponseError e) {
