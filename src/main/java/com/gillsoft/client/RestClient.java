@@ -45,7 +45,8 @@ public class RestClient {
 	public static final String TRIPS_CACHE_KEY = "neobus.trips.";
 	
 	private static final String STATUS_OK = "OK";
-	private static final String STATUS_ERROR = "Error";
+	private static final String STATUS_ERROR = "ERROR";
+	private static final String NOT_LOGGED = "NOT LOGGED";
 	
 	public static final String TIME_FORMAT = "HH:mm";
 	public static final String DATE_FORMAT = "yyyy-MM-dd";
@@ -56,7 +57,6 @@ public class RestClient {
 	public final static FastDateFormat fullDateFormat = FastDateFormat.getInstance(FULL_DATE_FORMAT);
 	
 	private static final String LOGIN = "login";
-	private static final String LOGOUT = "logout";
 	private static final String STATIONS = "station";
 	private static final String ROUTE = "schedule/{0}/detailed";
 	private static final String SCHEDULE = "schedule/{0}";
@@ -66,6 +66,8 @@ public class RestClient {
 	@Autowired
     @Qualifier("RedisMemoryCache")
 	private CacheHandler cache;
+	
+	private HttpHeaders headers = new HttpHeaders();
 	
 	private RestTemplate template;
 	
@@ -79,23 +81,18 @@ public class RestClient {
 	
 	public RestTemplate createNewPoolingTemplate(int requestTimeout) {
 		RestTemplate template = new RestTemplate(new BufferingClientHttpRequestFactory(
-				RestTemplateUtil.createPoolingFactory(Config.getUrl(), 300, requestTimeout)));
+				RestTemplateUtil.createPoolingFactory(Config.getUrl(), 300, requestTimeout, true, true)));
 		template.setInterceptors(Collections.singletonList(
 				new SimpleRequestResponseLoggingInterceptor()));
 		return template;
 	}
 	
-	public void login(HttpHeaders headers) throws ResponseError {
+	private void login() throws ResponseError {
 		LoginRequest request = new LoginRequest();
 		request.setLogin(Config.getLogin());
 		request.setPassword(Config.getPassword());
 		getResult(template, request, LOGIN, HttpMethod.POST,
-				new ParameterizedTypeReference<Response<Object>>() { }, headers);
-	}
-	
-	public void logout(HttpHeaders headers) throws ResponseError {
-		getResult(template, null, LOGOUT, HttpMethod.POST,
-				new ParameterizedTypeReference<Response<Object>>() { }, headers);
+				new ParameterizedTypeReference<Response<Object>>() { }, false);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -110,7 +107,7 @@ public class RestClient {
 	
 	public List<Station> getStations() throws ResponseError {
 		return getResult(template, null, STATIONS, HttpMethod.GET,
-				new ParameterizedTypeReference<Response<List<Station>>>() { });
+				new ParameterizedTypeReference<Response<List<Station>>>() { }, true);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -131,7 +128,7 @@ public class RestClient {
 	
 	public List<ScheduleTrip> getSchedule(Date date) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(SCHEDULE, dateFormat.format(date)),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<List<ScheduleTrip>>>() { });
+				HttpMethod.GET, new ParameterizedTypeReference<Response<List<ScheduleTrip>>>() { }, true);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -152,7 +149,7 @@ public class RestClient {
 	
 	public List<Trip> getTrips(String from, String to, Date date) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(SCHEDULE_FROM_TO, dateFormat.format(date), from, to),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<List<Trip>>>() { });
+				HttpMethod.GET, new ParameterizedTypeReference<Response<List<Trip>>>() { }, true);
 	}
 	
 	public Price getCachedPrice(String from, String to, String tripId, Date departure) throws ResponseError {
@@ -172,7 +169,7 @@ public class RestClient {
 	
 	public Price getPrice(String from, String to, String tripId) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(PRICES, from, to, tripId),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<Price>>() { });
+				HttpMethod.GET, new ParameterizedTypeReference<Response<Price>>() { }, true);
 	}
 	
 	public Route getCachedRoute(String tripId) throws ResponseError {
@@ -192,15 +189,8 @@ public class RestClient {
 	
 	public Route getRoute(String tripId) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(ROUTE, tripId),
-				HttpMethod.GET, new ParameterizedTypeReference<Response<Route>>() { });
+				HttpMethod.GET, new ParameterizedTypeReference<Response<Route>>() { }, true);
 	}
-	
-//	public List<Trip> search(String from, String to, Date date) throws ResponseError {
-//		List<ScheduleTrip> schedule = getCachedSchedule(date);
-//		if (schedule != null) {
-//			List<Trip> trips = getCachedTrips(from, to, date);
-//		}
-//	}
 	
 	private Object checkCache(Object value) throws ResponseError {
 		if (value instanceof ResponseError) {
@@ -214,41 +204,54 @@ public class RestClient {
 		if (response == null) {
 			throw new ResponseError("Empty response");
 		}
-		if (Objects.equals(response.getStatus(), STATUS_ERROR)) {
+		if (Objects.equals(response.getStatus().toUpperCase(), STATUS_ERROR)) {
 			throw new ResponseError(response.getMessage());
 		}
-		if (!Objects.equals(response.getStatus(), STATUS_OK)) {
+		if (!Objects.equals(response.getStatus().toUpperCase(), STATUS_OK)) {
 			throw new ResponseError("Unknown status");
 		}
 	}
 	
 	private <T> T getResult(RestTemplate template, Request request, String method, HttpMethod httpMethod,
-			ParameterizedTypeReference<Response<T>> type) throws ResponseError {
-		HttpHeaders headers = new HttpHeaders();
-		try {
-			this.template = createNewPoolingTemplate(Config.getRequestTimeout());
-			login(headers);
-			return getResult(template, request, method, httpMethod, type, headers);
-		} finally {
-			logout(headers);
-		}
-	}
-	
-	private <T> T getResult(RestTemplate template, Request request, String method, HttpMethod httpMethod,
-			ParameterizedTypeReference<Response<T>> type, HttpHeaders headers) throws ResponseError {
-		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + method)
-				.build().toUri();
+			ParameterizedTypeReference<Response<T>> type, boolean checkLogin) throws ResponseError {
+		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + method).build().toUri();
 		RequestEntity<Request> requestEntity = new RequestEntity<Request>(request, headers, httpMethod, uri);
 		ResponseEntity<Response<T>> response = template.exchange(requestEntity, type);
+		
+		// создаем хедер с куками только для логина
 		if (Objects.equals(method, LOGIN)) {
-			createHeaders(headers, response.getHeaders().getValuesAsList(HttpHeaders.SET_COOKIE));
+			createHeaders(response.getHeaders().getValuesAsList(HttpHeaders.SET_COOKIE));
 		}
 		Response<T> resultResponse = response.getBody();
-		checkStatus(resultResponse);
+		try {
+			checkStatus(resultResponse);
+		} catch (ResponseError e) {
+			
+			// проверяем авторизацию
+			if (checkLogin) {
+				if (e.getMessage() != null
+						&& e.getMessage().toUpperCase().contains(NOT_LOGGED)) {
+					HttpHeaders copy = this.headers;
+					
+					// чтобы не дергать логин несколько раз подряд
+					synchronized (RestClient.class) {
+						
+						// если хедер изменился, то логин выполнен
+						if (copy == this.headers) {
+							login();
+						}
+					}
+					// вызываем тот же запрос с новым хедером авторизации но без проврки логина
+					return getResult(template, request, method, httpMethod, type, false);
+				}
+			}
+			throw e;
+		}
 		return response.getBody().getData();
 	}
 	
-	private HttpHeaders createHeaders(HttpHeaders headers, List<String> cookies) {
+	private void createHeaders(List<String> cookies) {
+		headers = new HttpHeaders();
 		Map<String, String> cookiesMap = new HashMap<>();
 		for (String cookie : cookies) {
 			if (cookie.contains("=")) {
@@ -259,7 +262,6 @@ public class RestClient {
 		for (Entry<String, String> cookie : cookiesMap.entrySet()) {
 			headers.add(HttpHeaders.COOKIE, String.join("=", cookie.getKey(), cookie.getValue()));
 		}
-		return headers;
 	}
 
 	public CacheHandler getCache() {
