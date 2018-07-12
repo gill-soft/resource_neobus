@@ -1,5 +1,6 @@
 package com.gillsoft.client;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.text.MessageFormat;
 import java.util.Calendar;
@@ -32,6 +33,7 @@ import com.gillsoft.cache.CacheHandler;
 import com.gillsoft.cache.IOCacheException;
 import com.gillsoft.cache.RedisMemoryCache;
 import com.gillsoft.logging.SimpleRequestResponseLoggingInterceptor;
+import com.gillsoft.model.Customer;
 import com.gillsoft.util.RestTemplateUtil;
 
 @Component
@@ -62,6 +64,11 @@ public class RestClient {
 	private static final String SCHEDULE = "schedule/{0}";
 	private static final String SCHEDULE_FROM_TO = "schedule/{0}/from/{1}/to/{2}";
 	private static final String PRICES = "price/from/{0}/to/{1}/cruise/{2}/details";
+	private static final String LOCK_SEATS = "price/from/{0}/to/{1}/cruise/{2}/seats/{3}/lock";
+	private static final String TICKET = "ticket";
+	private static final String GET_TICKET = "ticket/{0}";
+	private static final String CONFIRM = "ticket/{0}/confirm";
+	private static final String CANCEL = "ticket/{0}/cancel";
 
 	@Autowired
     @Qualifier("RedisMemoryCache")
@@ -190,6 +197,48 @@ public class RestClient {
 	public Route getRoute(String tripId) throws ResponseError {
 		return getResult(searchTemplate, null, MessageFormat.format(ROUTE, tripId),
 				HttpMethod.GET, new ParameterizedTypeReference<Response<Route>>() { }, true);
+	}
+	
+	public Offer lockSeats(String from, String to, String tripId) throws ResponseError {
+		return getResult(template, null, MessageFormat.format(LOCK_SEATS, from, to, tripId, 1),
+				HttpMethod.GET, new ParameterizedTypeReference<Response<Offer>>() { }, true);
+	}
+	
+	public Ticket create(Customer customer, String from, String to, String tripId, BigDecimal price,
+			String offerId) throws ResponseError {
+		Request request = new Request();
+		request.setOfferId(offerId);
+		request.setCruiseId(tripId);
+		request.setStationId1(from);
+		request.setStationId2(to);
+		request.setPrice(price);
+		request.setSeats(1);
+		request.setEmail(customer.getEmail());
+		request.setPhone(customer.getPhone());
+		request.setName(customer.getName());
+		request.setSurname(customer.getSurname());
+		return process(request, TICKET);
+	}
+	
+	public Ticket confirm(String ticketId) throws ResponseError {
+		return process(null, MessageFormat.format(CONFIRM, ticketId));
+	}
+	
+	public Ticket cancel(String ticketId) throws ResponseError {
+		return process(null, MessageFormat.format(CANCEL, ticketId));
+	}
+	
+	public Ticket get() throws ResponseError {
+		return process(null, GET_TICKET, HttpMethod.GET);
+	}
+	
+	private Ticket process(Request request, String method) throws ResponseError {
+		return process(request, method, HttpMethod.POST);
+	}
+	
+	private Ticket process(Request request, String method, HttpMethod httpMethod) throws ResponseError {
+		return getResult(template, request, method, httpMethod,
+				new ParameterizedTypeReference<Response<Ticket>>() { }, true);
 	}
 	
 	private Object checkCache(Object value) throws ResponseError {

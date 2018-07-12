@@ -14,6 +14,7 @@ import org.joda.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClientException;
 
 import com.gillsoft.abstract_rest_service.SimpleAbstractTripSearchService;
 import com.gillsoft.cache.CacheHandler;
@@ -24,7 +25,9 @@ import com.gillsoft.client.ResponseError;
 import com.gillsoft.client.RestClient;
 import com.gillsoft.client.RouteDetail;
 import com.gillsoft.client.ScheduleTrip;
+import com.gillsoft.client.TariffIdModel;
 import com.gillsoft.client.Trip;
+import com.gillsoft.client.TripIdModel;
 import com.gillsoft.client.TripPackage;
 import com.gillsoft.model.Currency;
 import com.gillsoft.model.Document;
@@ -182,11 +185,12 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 	
 	private String addSegment(Map<String, Locality> localities, Map<String, Segment> segments, TripPackage tripPackage,
 			Trip trip) {
+		String key = new TripIdModel(trip.getScheduleId(), trip.getStationId1(), trip.getStationId2(), trip.getTime1()).asString();
 		Segment segment = new Segment();
 		
 		// проставляем номера рейсов
 		for (ScheduleTrip scheduleTrip : tripPackage.getSchedule()) {
-			if (Objects.equals(trip.getScheduleId(), trip.getScheduleId())) {
+			if (Objects.equals(scheduleTrip.getScheduleId(), trip.getScheduleId())) {
 				segment.setNumber(scheduleTrip.getName());
 				break;
 			}
@@ -203,8 +207,8 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		// маршрут
 		segment.setRoute(createRoute(localities, trip.getRoute()));
 		
-		segments.put(trip.getScheduleId(), segment);
-		return trip.getScheduleId();
+		segments.put(key, segment);
+		return key;
 	}
 	
 	private void addPrice(Price price, Segment segment) {
@@ -212,16 +216,13 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		PriceDetail maxDetail = null;
 		for (PriceDetail detail : price.getDetails()) {
 			if (maxDetail == null
-					|| maxDetail.getSeats() < detail.getSeats()) {
+					|| maxDetail.getPrice().compareTo(detail.getPrice()) < 0) {
 				maxDetail = detail;
 			}
 		}
-		Tariff tariff = new Tariff();
-		tariff.setValue(maxDetail.getPrice());
-		tariff.setAvailableCount(maxDetail.getSeats());
 		tripPrice.setCurrency(Currency.PLN);
 		tripPrice.setAmount(maxDetail.getPrice());
-		tripPrice.setTariff(tariff);
+		tripPrice.setTariff(createTariff(maxDetail));
 		
 		segment.setPrice(tripPrice);
 	}
@@ -251,7 +252,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		return tripRoute;
 	}
 	
-	public Locality addStation(Map<String, Locality> localities, String id) {
+	public static Locality addStation(Map<String, Locality> localities, String id) {
 		Locality fromDict = LocalityServiceController.getLocality(id);
 		if (fromDict == null) {
 			return null;
@@ -275,11 +276,12 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 	@Override
 	public Route getRouteResponse(String tripId) {
 		try {
-			com.gillsoft.client.Route route = client.getCachedRoute(tripId);
+			TripIdModel model = new TripIdModel().create(tripId);
+			com.gillsoft.client.Route route = client.getCachedRoute(model.getId());
 			return createRoute(null, route);
 		} catch (Exception e) {
+			throw new RestClientException(e.getMessage());
 		}
-		return null;
 	}
 
 	@Override
@@ -294,8 +296,25 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 
 	@Override
 	public List<Tariff> getTariffsResponse(String tripId) {
-		// TODO Auto-generated method stub
-		return null;
+		TripIdModel model = new TripIdModel().create(tripId);
+		try {
+			Price price = client.getCachedPrice(model.getFrom(), model.getTo(), model.getId(), model.getDate());
+			List<Tariff> tariffs = new ArrayList<>();
+			for (PriceDetail detail : price.getDetails()) {
+				tariffs.add(createTariff(detail));
+			}
+			return tariffs;
+		} catch (Exception e) {
+			throw new RestClientException(e.getMessage());
+		}
+	}
+	
+	private Tariff createTariff(PriceDetail detail) {
+		Tariff tariff = new Tariff();
+		tariff.setId(new TariffIdModel(detail.getPrice()).asString());
+		tariff.setValue(detail.getPrice());
+		tariff.setAvailableCount(detail.getSeats());
+		return tariff;
 	}
 
 	@Override
@@ -311,8 +330,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 
 	@Override
 	public List<ReturnCondition> getConditionsResponse(String tripId, String tariffId) {
-		// TODO Auto-generated method stub
-		return null;
+		throw RestClient.createUnavailableMethod();
 	}
 
 	@Override

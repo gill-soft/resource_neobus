@@ -2,8 +2,8 @@ package com.gillsoft.client;
 
 import java.math.BigDecimal;
 
-public class Request {
-	
+public class OrderRequest {
+
 	private String name;
 	private String surname;
 	private String email;
