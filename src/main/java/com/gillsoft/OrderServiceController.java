@@ -1,6 +1,7 @@
 package com.gillsoft;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -119,14 +120,47 @@ public class OrderServiceController extends AbstractOrderService {
 
 	@Override
 	public OrderResponse getResponse(String orderId) {
-		// TODO Auto-generated method stub
-		return null;
+
+		// преобразовываем ид заказа в объкт
+		OrderIdModel orderIdModel = new OrderIdModel().create(orderId);
+
+		OrderResponse response = getTickets(orderIdModel.getTickets());
+		response.setId(orderId);
+		
+		return response;
 	}
 
 	@Override
 	public OrderResponse getServiceResponse(String serviceId) {
-		// TODO Auto-generated method stub
-		return null;
+		return getTickets(Collections.singletonList(new TicketIdModel().create(serviceId)));
+	}
+	
+	private OrderResponse getTickets(List<TicketIdModel> tickets) {
+		
+		// формируем ответ
+		OrderResponse response = new OrderResponse();
+		Map<String, Locality> localities = new HashMap<>();
+		Map<String, Segment> segments = new HashMap<>();
+
+		// преобразовываем ид заказа в объкт
+		List<ServiceItem> resultItems = new ArrayList<>(tickets.size());
+		
+		// выкупаем заказы и формируем ответ
+		for (TicketIdModel ticket : tickets) {
+			ServiceItem serviceItem = new ServiceItem();
+			serviceItem.setId(ticket.asString());
+			try {
+				Ticket resTicket = client.get(ticket.getId());
+				createService(resTicket, ticket, localities, segments);
+			} catch (ResponseError e) {
+				serviceItem.setError(new RestError(e.getMessage()));
+			}
+			resultItems.add(serviceItem);
+		}
+		response.setLocalities(localities);
+		response.setSegments(segments);
+		response.setServices(resultItems);
+		return response;
 	}
 
 	@Override
@@ -137,25 +171,7 @@ public class OrderServiceController extends AbstractOrderService {
 
 	@Override
 	public OrderResponse confirmResponse(String orderId) {
-		// формируем ответ
-		OrderResponse response = new OrderResponse();
-		List<ServiceItem> resultItems = new ArrayList<>();
-
-		// преобразовываем ид заказа в объкт
-		OrderIdModel orderIdModel = new OrderIdModel().create(orderId);
-		
-		// выкупаем заказы и формируем ответ
-		for (TicketIdModel ticket : orderIdModel.getTickets()) {
-			try {
-				client.confirm(ticket.getId());
-				addServiceItems(resultItems, ticket, true, null);
-			} catch (ResponseError e) {
-				addServiceItems(resultItems, ticket, false, new RestError(e.getMessage()));
-			}
-		}
-		response.setOrderId(orderId);
-		response.setServices(resultItems);
-		return response;
+		return operationResponse(orderId, true);
 	}
 	
 	private void addServiceItems(List<ServiceItem> resultItems, TicketIdModel ticket, boolean confirmed, RestError error) {
@@ -165,23 +181,59 @@ public class OrderServiceController extends AbstractOrderService {
 		serviceItem.setError(error);
 		resultItems.add(serviceItem);
 	}
+	
+	public OrderResponse operationResponse(String orderId, boolean confirm) {
+		
+		// формируем ответ
+		OrderResponse response = new OrderResponse();
+
+		// преобразовываем ид заказа в объкт
+		OrderIdModel orderIdModel = new OrderIdModel().create(orderId);
+		List<ServiceItem> resultItems = new ArrayList<>(orderIdModel.getTickets().size());
+		
+		// выкупаем заказы и формируем ответ
+		for (TicketIdModel ticket : orderIdModel.getTickets()) {
+			try {
+				if (confirm) {
+					client.confirm(ticket.getId());
+				} else {
+					client.cancel(ticket.getId());
+				}
+				addServiceItems(resultItems, ticket, true, null);
+			} catch (ResponseError e) {
+				addServiceItems(resultItems, ticket, false, new RestError(e.getMessage()));
+			}
+		}
+		response.setOrderId(orderId);
+		response.setServices(resultItems);
+		return response;
+	}
 
 	@Override
 	public OrderResponse cancelResponse(String orderId) {
-		// TODO Auto-generated method stub
-		return null;
+		return operationResponse(orderId, false);
 	}
 
 	@Override
 	public OrderResponse prepareReturnServicesResponse(OrderRequest request) {
-		// TODO Auto-generated method stub
-		return null;
+		throw RestClient.createUnavailableMethod();
 	}
 
 	@Override
 	public OrderResponse returnServicesResponse(OrderRequest request) {
-		// TODO Auto-generated method stub
-		return null;
+		OrderResponse response = new OrderResponse();
+		response.setServices(new ArrayList<>(request.getServices().size()));
+		for (ServiceItem serviceItem : request.getServices()) {
+			TicketIdModel model = new TicketIdModel().create(serviceItem.getId());
+			try {
+				client.cancel(model.getId());
+				serviceItem.setConfirmed(true);
+			} catch (ResponseError e) {
+				serviceItem.setError(new RestError(e.getMessage()));
+			}
+			response.getServices().add(serviceItem);
+		}
+		return response;
 	}
 
 	@Override

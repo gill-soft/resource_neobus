@@ -33,7 +33,7 @@ import com.gillsoft.model.Currency;
 import com.gillsoft.model.Document;
 import com.gillsoft.model.Locality;
 import com.gillsoft.model.Organisation;
-import com.gillsoft.model.Required;
+import com.gillsoft.model.RequiredField;
 import com.gillsoft.model.RestError;
 import com.gillsoft.model.ReturnCondition;
 import com.gillsoft.model.Route;
@@ -318,9 +318,13 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 	}
 
 	@Override
-	public Required getRequiredFieldsResponse(String tripId) {
-		// TODO Auto-generated method stub
-		return null;
+	public List<RequiredField> getRequiredFieldsResponse(String tripId) {
+		List<RequiredField> fields = new ArrayList<>();
+		fields.add(RequiredField.NAME);
+		fields.add(RequiredField.SURNAME);
+		fields.add(RequiredField.PHONE);
+		fields.add(RequiredField.EMAIL);
+		return fields;
 	}
 
 	@Override

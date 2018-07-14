@@ -228,8 +228,8 @@ public class RestClient {
 		return process(null, MessageFormat.format(CANCEL, ticketId));
 	}
 	
-	public Ticket get() throws ResponseError {
-		return process(null, GET_TICKET, HttpMethod.GET);
+	public Ticket get(String ticketId) throws ResponseError {
+		return process(null, MessageFormat.format(GET_TICKET, ticketId), HttpMethod.GET);
 	}
 	
 	private Ticket process(Request request, String method) throws ResponseError {
