@@ -147,15 +147,14 @@ public class OrderServiceController extends AbstractOrderService {
 		
 		// выкупаем заказы и формируем ответ
 		for (TicketIdModel ticket : tickets) {
-			ServiceItem serviceItem = new ServiceItem();
-			serviceItem.setId(ticket.asString());
 			try {
 				Ticket resTicket = client.get(ticket.getId());
-				createService(resTicket, ticket, localities, segments);
+				resultItems.add(createService(resTicket, ticket, localities, segments));
 			} catch (ResponseError e) {
+				ServiceItem serviceItem = new ServiceItem();
 				serviceItem.setError(new RestError(e.getMessage()));
+				resultItems.add(serviceItem);
 			}
-			resultItems.add(serviceItem);
 		}
 		response.setLocalities(localities);
 		response.setSegments(segments);
@@ -165,8 +164,7 @@ public class OrderServiceController extends AbstractOrderService {
 
 	@Override
 	public OrderResponse bookingResponse(String orderId) {
-		// TODO Auto-generated method stub
-		return null;
+		throw RestClient.createUnavailableMethod();
 	}
 
 	@Override
