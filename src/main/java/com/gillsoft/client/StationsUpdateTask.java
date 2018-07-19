@@ -23,13 +23,17 @@ public class StationsUpdateTask implements Runnable, Serializable {
 		
 		RestClient client = ContextProvider.getBean(RestClient.class);
 		try {
-			List<Station> stations = client.getStations();
+			List<Station> stations = null;
+			try {
+				stations = client.getStations();
+			} catch (ResponseError e) {
+			}
 			if (stations == null) {
 				stations = (List<Station>) client.getCache().read(params);
 			}
 			params.put(RedisMemoryCache.UPDATE_TASK, this);
 			client.getCache().write(stations, params);
-		} catch (ResponseError | IOCacheException e) {
+		} catch (IOCacheException e) {
 		}
 	}
 

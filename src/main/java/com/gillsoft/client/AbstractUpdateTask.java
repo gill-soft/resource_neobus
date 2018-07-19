@@ -27,8 +27,8 @@ public abstract class AbstractUpdateTask implements Runnable, Serializable {
 				// время жизни кэша
 				params.put(RedisMemoryCache.TIME_TO_LIVE, timeToLive);
 				
-				// обновляем, если время жизни больше времени обновления
-				if (timeToLive > Config.getCacheRouteUpdateDelay()) {
+				// обновляем, если время жизни больше времени обновления в 2 раза
+				if (timeToLive / 2 > updateDelay) {
 					params.put(RedisMemoryCache.UPDATE_TASK, this);
 					params.put(RedisMemoryCache.UPDATE_DELAY, updateDelay);
 				}

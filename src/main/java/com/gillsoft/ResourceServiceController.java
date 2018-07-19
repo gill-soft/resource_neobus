@@ -30,11 +30,16 @@ public class ResourceServiceController extends AbstractResourceService {
 		// search
 		addMethod(methods, "Init search", Method.SEARCH, MethodType.POST);
 		addMethod(methods, "Return search result", Method.SEARCH, MethodType.GET);
-		addMethod(methods, "Return free seats on trip", Method.SEARCH_TRIP_SEATS, MethodType.GET);
+		addMethod(methods, "Return trip route", Method.SEARCH_TRIP_ROUTE, MethodType.GET);
+		addMethod(methods, "Return trip tariffs", Method.SEARCH_TRIP_TARIFFS, MethodType.GET);
+		addMethod(methods, "Return required fields to create order", Method.SEARCH_TRIP_REQUIRED, MethodType.GET);
 
 		// order
 		addMethod(methods, "Create new order", Method.ORDER, MethodType.POST);
 		addMethod(methods, "Confirm order", Method.ORDER_CONFIRM, MethodType.POST);
+		addMethod(methods, "Get order information", Method.ORDER, MethodType.GET);
+		addMethod(methods, "Get service information", Method.ORDER_SERVICE, MethodType.GET);
+		addMethod(methods, "Cancel order", Method.ORDER_SERVICE, MethodType.POST);
 		addMethod(methods, "Prepare order for return", Method.ORDER_RETURN_PREPARE, MethodType.POST);
 		addMethod(methods, "Confirm order return", Method.ORDER_RETURN_CONFIRM, MethodType.POST);
 		return methods;

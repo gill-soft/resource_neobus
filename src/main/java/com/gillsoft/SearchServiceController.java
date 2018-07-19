@@ -94,7 +94,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 						tripPackage.getTrips().addAll(trips);
 					}
 				}
-				// если рейсы есть, то проверяем стоимость и маршрут и добавляем, если их нет
+				// если рейсы есть, то проверяем стоимость и маршрут и добавляем
 				if (tripPackage.getTrips() != null) {
 					
 					// для каждого рейса ищем стоимость и маршрут
