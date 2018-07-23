@@ -67,7 +67,6 @@ public class OrderServiceController extends AbstractOrderService {
 			}
 		}
 		response.setOrderId(orderId.asString());
-		response.setCustomers(request.getCustomers());
 		response.setLocalities(localities);
 		response.setSegments(segments);
 		response.setServices(resultItems);
@@ -171,8 +170,9 @@ public class OrderServiceController extends AbstractOrderService {
 	public OrderResponse confirmResponse(String orderId) {
 		return operationResponse(orderId, true);
 	}
-	
-	private void addServiceItems(List<ServiceItem> resultItems, TicketIdModel ticket, boolean confirmed, RestError error) {
+
+	private void addServiceItems(List<ServiceItem> resultItems, TicketIdModel ticket, boolean confirmed,
+			RestError error) {
 		ServiceItem serviceItem = new ServiceItem();
 		serviceItem.setId(ticket.asString());
 		serviceItem.setConfirmed(confirmed);
