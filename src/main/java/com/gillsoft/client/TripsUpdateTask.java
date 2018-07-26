@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.apache.commons.lang.time.DateUtils;
 
+import com.gillsoft.cache.AbstractUpdateTask;
 import com.gillsoft.util.ContextProvider;
 
 public class TripsUpdateTask extends AbstractUpdateTask {
@@ -44,12 +45,12 @@ public class TripsUpdateTask extends AbstractUpdateTask {
 					}
 				}
 			}
-			writeObject(RestClient.getTripsCacheKey(date, from, to), trips, false,
+			writeObject(client.getCache(), RestClient.getTripsCacheKey(date, from, to), trips,
 					getTimeToLive(trips), Config.getCacheTripUpdateDelay());
 		} catch (ResponseError e) {
 			
 			// ошибку тоже кладем в кэш
-			writeObject(RestClient.getTripsCacheKey(date, from, to), e, true,
+			writeObject(client.getCache(), RestClient.getTripsCacheKey(date, from, to), e,
 					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}

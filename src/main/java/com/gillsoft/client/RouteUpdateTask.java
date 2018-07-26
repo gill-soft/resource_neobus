@@ -1,5 +1,6 @@
 package com.gillsoft.client;
 
+import com.gillsoft.cache.AbstractUpdateTask;
 import com.gillsoft.util.ContextProvider;
 
 public class RouteUpdateTask extends AbstractUpdateTask {
@@ -19,12 +20,12 @@ public class RouteUpdateTask extends AbstractUpdateTask {
 			Route route = client.getRoute(tripId);
 			
 			// кладем маршрут в кэш
-			writeObject(RestClient.getRouteCacheKey(tripId), route, false,
+			writeObject(client.getCache(), RestClient.getRouteCacheKey(tripId), route,
 					getTimeToLive(route), Config.getCacheRouteUpdateDelay());
 		} catch (ResponseError e) {
 			
 			// ошибку тоже кладем в кэш
-			writeObject(RestClient.getRouteCacheKey(tripId), e, true,
+			writeObject(client.getCache(), RestClient.getRouteCacheKey(tripId), e,
 					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}

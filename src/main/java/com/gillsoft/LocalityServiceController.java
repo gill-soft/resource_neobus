@@ -28,18 +28,18 @@ public class LocalityServiceController extends AbstractLocalityService {
 	private RestClient client;
 
 	@Override
-	public List<Locality> getAllResponse(LocalityRequest arg0) {
+	public List<Locality> getAllResponse(LocalityRequest request) {
 		createLocalities();
 		return all;
 	}
 
 	@Override
-	public Map<String, List<String>> getBindingResponse(LocalityRequest arg0) {
+	public Map<String, List<String>> getBindingResponse(LocalityRequest request) {
 		return null;
 	}
 
 	@Override
-	public List<Locality> getUsedResponse(LocalityRequest arg0) {
+	public List<Locality> getUsedResponse(LocalityRequest request) {
 		createLocalities();
 		return used;
 	}
@@ -68,8 +68,8 @@ public class LocalityServiceController extends AbstractLocalityService {
 								}
 								LocalityServiceController.all = all;
 								LocalityServiceController.used = used;
-								cacheError = false;
 							}
+							cacheError = false;
 						} catch (IOCacheException e) {
 							try {
 								TimeUnit.MILLISECONDS.sleep(100);

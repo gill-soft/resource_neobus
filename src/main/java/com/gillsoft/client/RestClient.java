@@ -265,8 +265,12 @@ public class RestClient {
 			ParameterizedTypeReference<Response<T>> type, boolean checkLogin) throws ResponseError {
 		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + method).build().toUri();
 		RequestEntity<Request> requestEntity = new RequestEntity<Request>(request, headers, httpMethod, uri);
-		ResponseEntity<Response<T>> response = template.exchange(requestEntity, type);
-		
+		ResponseEntity<Response<T>> response = null;
+		try {
+			response = template.exchange(requestEntity, type);
+		} catch (Exception e) {
+			throw new ResponseError(e.getMessage());
+		}
 		// создаем хедер с куками только для логина
 		if (Objects.equals(method, LOGIN)) {
 			createHeaders(response.getHeaders().getValuesAsList(HttpHeaders.SET_COOKIE));

@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.apache.commons.lang.time.DateUtils;
 
+import com.gillsoft.cache.AbstractUpdateTask;
 import com.gillsoft.util.ContextProvider;
 
 public class ScheduleUpdateTask extends AbstractUpdateTask {
@@ -28,12 +29,12 @@ public class ScheduleUpdateTask extends AbstractUpdateTask {
 			Date liveDate = DateUtils.addDays(date, 1);
 			long timeToLive = liveDate.getTime() - System.currentTimeMillis();
 			
-			writeObject(RestClient.getScheduleCacheKey(date), schedule, false,
+			writeObject(client.getCache(), RestClient.getScheduleCacheKey(date), schedule,
 					timeToLive, Config.getCacheScheduleUpdateDelay());
 		} catch (ResponseError e) {
 			
 			// ошибку тоже кладем в кэш
-			writeObject(RestClient.getScheduleCacheKey(date), e, true,
+			writeObject(client.getCache(), RestClient.getScheduleCacheKey(date), e,
 					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}

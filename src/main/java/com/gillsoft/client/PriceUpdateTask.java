@@ -2,6 +2,7 @@ package com.gillsoft.client;
 
 import java.util.Date;
 
+import com.gillsoft.cache.AbstractUpdateTask;
 import com.gillsoft.util.ContextProvider;
 
 public class PriceUpdateTask extends AbstractUpdateTask {
@@ -24,12 +25,12 @@ public class PriceUpdateTask extends AbstractUpdateTask {
 	public void run() {
 		RestClient client = ContextProvider.getBean(RestClient.class);
 		try {
-			writeObject(RestClient.getPriceCacheKey(tripId, from, to), client.getPrice(from, to, tripId), false,
+			writeObject(client.getCache(), RestClient.getPriceCacheKey(tripId, from, to), client.getPrice(from, to, tripId),
 					getTimeToLive(), Config.getCacheScheduleUpdateDelay());
 		} catch (ResponseError e) {
 			
 			// ошибку тоже кладем в кэш
-			writeObject(RestClient.getPriceCacheKey(tripId, from, to), e, true,
+			writeObject(client.getCache(), RestClient.getPriceCacheKey(tripId, from, to), e,
 					Config.getCacheErrorTimeToLive(), Config.getCacheErrorUpdateDelay());
 		}
 	}
