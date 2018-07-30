@@ -1,6 +1,7 @@
 package com.gillsoft;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import org.apache.commons.lang.time.DateUtils;
 import org.joda.time.Days;
 import org.joda.time.LocalDate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -239,11 +241,11 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 			return route1.getTime().compareTo(route2.getTime());
 		});
 		tripRoute.setPath(new ArrayList<>());
-		Date first = route.getDetails().get(0).getTime();
+		LocalDate first = new LocalDate(DateUtils.truncate(route.getDetails().get(0).getTime(), Calendar.DATE));
 		for (RouteDetail routeDetail : route.getDetails()) {
 			RoutePoint point = new RoutePoint();
-			point.setArrivalDay(Days.daysBetween(
-					new LocalDate(first), new LocalDate(routeDetail.getTime())).getDays());
+			point.setArrivalDay(Days.daysBetween(first,
+					new LocalDate(DateUtils.truncate(routeDetail.getTime(), Calendar.DATE))).getDays());
 			point.setId(routeDetail.getDetailId());
 			point.setLocality(addStation(localities, routeDetail.getStationId()));
 			point.setDepartureTime(RestClient.timeFormat.format(routeDetail.getTime()));
