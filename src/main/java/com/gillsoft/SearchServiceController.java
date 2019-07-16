@@ -206,6 +206,9 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		// стоимость
 		addPrice(trip.getPrice(), segment);
 		
+		// количество свободных мест берем с тарифа
+		setFreeSeatsCount(segment);
+		
 		// маршрут
 		segment.setRoute(createRoute(localities, trip.getRoute()));
 		
@@ -213,18 +216,27 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		return key;
 	}
 	
+	private void setFreeSeatsCount(Segment segment) {
+		segment.setFreeSeatsCount(segment.getPrice().getTariff().getAvailableCount());
+	}
+	
 	private void addPrice(Price price, Segment segment) {
 		com.gillsoft.model.Price tripPrice = new com.gillsoft.model.Price();
 		PriceDetail maxDetail = null;
+		int maxSeats = 0;
 		for (PriceDetail detail : price.getDetails()) {
 			if (maxDetail == null
 					|| maxDetail.getPrice().compareTo(detail.getPrice()) < 0) {
 				maxDetail = detail;
 			}
+			if (detail.getSeats() > maxSeats) {
+				maxSeats = detail.getSeats();
+			}
 		}
 		tripPrice.setCurrency(Currency.PLN);
 		tripPrice.setAmount(maxDetail.getPrice());
 		tripPrice.setTariff(createTariff(maxDetail));
+		tripPrice.getTariff().setAvailableCount(maxSeats);
 		
 		segment.setPrice(tripPrice);
 	}

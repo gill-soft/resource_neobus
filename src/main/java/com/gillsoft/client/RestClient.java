@@ -74,7 +74,7 @@ public class RestClient {
     @Qualifier("RedisMemoryCache")
 	private CacheHandler cache;
 	
-	private HttpHeaders headers = new HttpHeaders();
+	private HttpHeaders headers;
 	
 	private RestTemplate template;
 	
@@ -263,6 +263,10 @@ public class RestClient {
 	
 	private <T> T getResult(RestTemplate template, Request request, String method, HttpMethod httpMethod,
 			ParameterizedTypeReference<Response<T>> type, boolean checkLogin) throws ResponseError {
+		if (headers == null
+				&& checkLogin) {
+			checkLogin();
+		}
 		URI uri = UriComponentsBuilder.fromUriString(Config.getUrl() + method).build().toUri();
 		RequestEntity<Request> requestEntity = new RequestEntity<Request>(request, headers, httpMethod, uri);
 		ResponseEntity<Response<T>> response = null;
@@ -284,23 +288,29 @@ public class RestClient {
 			if (checkLogin) {
 				if (e.getMessage() != null
 						&& e.getMessage().toUpperCase().contains(NOT_LOGGED)) {
-					HttpHeaders copy = this.headers;
 					
-					// чтобы не дергать логин несколько раз подряд
-					synchronized (RestClient.class) {
-						
-						// если хедер изменился, то логин выполнен
-						if (copy == this.headers) {
-							login();
-						}
-					}
-					// вызываем тот же запрос с новым хедером авторизации но без проврки логина
+					checkLogin();
+					
+					// вызываем тот же запрос с новым хедером авторизации но без проверки логина
 					return getResult(template, request, method, httpMethod, type, false);
 				}
 			}
 			throw e;
 		}
 		return response.getBody().getData();
+	}
+	
+	private void checkLogin() throws ResponseError {
+		HttpHeaders copy = this.headers;
+		
+		// чтобы не дергать логин несколько раз подряд
+		synchronized (RestClient.class) {
+			
+			// если хедер изменился, то логин выполнен
+			if (copy == this.headers) {
+				login();
+			}
+		}
 	}
 	
 	private void createHeaders(List<String> cookies) {
