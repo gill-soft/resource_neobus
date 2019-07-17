@@ -66,6 +66,10 @@ public class TripsUpdateTask extends AbstractUpdateTask {
 				max = trip.getTime1().getTime();
 			}
 		}
+		if (max == 0
+				|| max < System.currentTimeMillis()) {
+			return Config.getCacheErrorTimeToLive();
+		}
 		return max - System.currentTimeMillis();
 	}
 
