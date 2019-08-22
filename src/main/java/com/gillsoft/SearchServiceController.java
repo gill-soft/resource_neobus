@@ -252,7 +252,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		Collections.sort(route.getDetails(), (route1, route2) -> {
 			return route1.getTime().compareTo(route2.getTime());
 		});
-		tripRoute.setPath(new ArrayList<>());
+		List<RoutePoint> path = new ArrayList<>(route.getDetails().size());
 		LocalDate first = new LocalDate(DateUtils.truncate(route.getDetails().get(0).getTime(), Calendar.DATE));
 		for (RouteDetail routeDetail : route.getDetails()) {
 			RoutePoint point = new RoutePoint();
@@ -261,8 +261,9 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 			point.setId(routeDetail.getDetailId());
 			point.setLocality(addStation(localities, routeDetail.getStationId()));
 			point.setDepartureTime(RestClient.timeFormat.format(routeDetail.getTime()));
-			tripRoute.getPath().add(point);
+			path.add(point);
 		}
+		tripRoute.setPath(path);
 		return tripRoute;
 	}
 	
