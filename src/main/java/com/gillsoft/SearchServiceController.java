@@ -147,7 +147,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		} else {
 			
 			// добавляем следующую таску 
-			addInitSearchCallables(callables, tripPackage.getRequest());
+			addInitSearchCallables(callables, tripPackage.getRequest().getLocalityPairs().get(0), tripPackage.getRequest().getDates().get(0));
 		}
 	}
 
@@ -165,16 +165,13 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		}
 		if (tripPackage.getTrips() != null) {
 			List<com.gillsoft.model.Trip> trips = new ArrayList<>();
-			for (int i = tripPackage.getTrips().size() - 1; i >= 0; i--) {
-				Trip trip = tripPackage.getTrips().get(i);
+			for (Trip trip : tripPackage.getTrips()) {
 				if (trip.getPrice() != null) {
 					com.gillsoft.model.Trip resTrip = new com.gillsoft.model.Trip();
 					
 					// добавляем сегменты
 					resTrip.setId(addSegment(localities, segments, tripPackage, trip));
 					trips.add(resTrip);
-					
-					tripPackage.getTrips().remove(i);
 				}
 			}
 			container.setTrips(trips);
