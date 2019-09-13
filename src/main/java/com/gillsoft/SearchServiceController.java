@@ -147,10 +147,7 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 		} else {
 			
 			// добавляем следующую таску 
-			callables.add(() -> {
-				searchTrips(tripPackage);
-				return tripPackage;
-			});
+			addInitSearchCallables(callables, tripPackage.getRequest());
 		}
 	}
 
