@@ -142,9 +142,9 @@ public class SearchServiceController extends SimpleAbstractTripSearchService<Tri
 	public void addNextGetSearchCallablesAndResult(List<Callable<TripPackage>> callables, Map<String, Vehicle> vehicles,
 			Map<String, Locality> localities, Map<String, Organisation> organisations, Map<String, Segment> segments,
 			List<TripContainer> containers, TripPackage tripPackage) {
-		
-		addSearchResult(localities, segments, containers, tripPackage);
-		if (tripPackage.isInProgress()) {
+		if (!tripPackage.isInProgress()) {
+			addSearchResult(localities, segments, containers, tripPackage);
+		} else {
 			
 			// добавляем следующую таску 
 			callables.add(() -> {
